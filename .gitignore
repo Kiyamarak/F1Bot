@@ -1,0 +1,9 @@
+token.txt
+__pycache__/
+.vscode/
+Untitled-1.json
+tzinfo.dir
+tzinfo.dat
+tzinfo.bak
+requestor.py
+2020.json
