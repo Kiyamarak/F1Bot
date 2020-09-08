@@ -284,14 +284,18 @@ class sch(commands.Cog):
                         RACES['races'][current_round - 1]['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
                     start_time = start_time.replace(
                         tzinfo=datetime.timezone.utc).astimezone(tz)
-                    await asyncio.sleep(((start_time - (
-                        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz))).seconds) - delay)
-                    if dm.upper() == 'DM':
-                        await ctx.author.send(binary_enc+ " beginning now")
+                    wait_time = ((start_time - (
+                        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz))).seconds) - delay
+                    if (wait_time>0):
+                        await asyncio.sleep()
+                        if dm.upper() == 'DM':
+                            await ctx.author.send(binary_enc+ " beginning now")
+                        else:
+                            await ctx.send(ctx.author.mention + " " + binary_enc + " time!")
                     else:
-                        await ctx.send(ctx.author.mention + " " + binary_enc + " time!")
+                        await ctx.send(embed=discord.Embed(title='Invalid Session',description='The session is too close'))
                 return
-    async def predicate(ctx):
+    async def predicate(self,ctx):
         return ctx.author.id == 175006927967879169
     @commands.command(brief='Internal debugging test command')
     @commands.check(predicate)
