@@ -156,7 +156,7 @@ class sch(commands.Cog):
                                value=start_time.strftime('%#I:%M%p %Z on %B %#d'), inline=False)
             resp.set_author(name='F1 Schedule',
                             url='https://i.imgur.com/Ki0HyhF.png')
-            resp.set_footer(text='This is the ' + str(race[round])+'th ' + 'Grand Prix')
+            resp.set_footer(text='This is the ' + str(race['round'])+'th ' + 'Grand Prix')
             return resp
 
         resp = requester(round, tz)
