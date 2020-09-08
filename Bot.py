@@ -18,10 +18,11 @@ import typing
 TOKEN = open(os.getcwd() + '/token.txt', 'r').read()
 js = open(os.getcwd() + '/2020.json')
 RACES = json.load(js,object_pairs_hook=collections.OrderedDict)
-
+DEFAULT_TZ = 'EST5EDT'
 
 class F1Bot(commands.Bot):
     async def on_ready(self):
+        await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching,name='Formula 1'))
         print(self.user)
 
     
@@ -32,43 +33,60 @@ class sch(commands.Cog):
         self.bot = bot
     
     async def convert(self,key):
+        '''
+        special converter method for sched command
+        
+        key - str of user's id used as key in shelve
+        
+        either get previous time zone or use default_tz
+        '''
         with shelve.open('tzinfo',writeback=True) as tzdb:
             if key in tzdb:
                 try:
                     tz=tzdb[key]
                     tzdb.close()
                 except Exception as E:
-                    tz = pytz.timezone('EST5EDT')
+                    tz = pytz.timezone(DEFAULT_TZ)
                 return tz
             else:
                 tzdb.close()
-                return pytz.timezone("EST5EDT")
+                return pytz.timezone(DEFAULT_TZ)
     
     async def set_tz(self,key,tz):
+        '''
+        key - str of author's id, used as key in time zone database
+        tz - datetime.tzinfo object stored in time zone database
+        helper method to set time zone in db
+
+        returns embed with error or success
+        '''
         if isinstance(tz,datetime.tzinfo):
             with shelve.open('tzinfo',writeback=True) as tzdb:
                 tzdb[key]=tz
                 tzdb.close()
+                resp = discord.Embed(title='Timezone Set', description='You have set your timezone to be ' + str(tz))     
         else:
-            print('sigh')
-        return None
-
-    @commands.command()
-    async def settz(self, ctx, tz: typing.Optional[pytz.timezone]= None):
-        key = str(ctx.author.id)
-        if (tz == None):
-            resp = discord.Embed(
-                    title='Invalid Timezone!',
-                    description='Find a list of valid timezones here: \nhttps://pastebin.com/raw/ySiK8ja4')
-        else:
-            garbo = await self.set_tz(key,tz)
-            resp = discord.Embed(
-                        title='Timezone Set', description='You have set your timezone to be ' + str(tz))            
+            resp = discord.Embed(title='Invalid Timezone!',description='Find a list of valid timezones here: \nhttps://pastebin.com/raw/ySiK8ja4')
         resp.set_author(name='F1 Schedule', url="https://i.imgur.com/Ki0HyhF.png")
-        await ctx.send(embed=resp)
+        return resp
+    @commands.command(brief='Sets your Timezone in the Database',aliases=['tz','timezone','changetz','settimezone','setz'])
+    async def settz(self, ctx, tz: typing.Optional[pytz.timezone]= None):
+        ''' 
+        key - str of author's id, used as key in time zone database
+
+        command to set time zone in db
+        calls helper method
+        '''
+        key = str(ctx.author.id)
+        response = await self.set_tz(key,tz)
+        await ctx.send(embed=response)
     
-    @commands.command()
+    @commands.command(brief='Check your stored Timezone',asliases=['mytimezone','timezone'])
     async def mytz(self,ctx):
+        '''
+        key - str of author's id, used as key in time zone database
+        resp - discord.Embed containing the last used time zone or instruct user to set time zone
+        '''
         key = str(ctx.author.id)
         with shelve.open('tzinfo',writeback=True) as db:
             if key in db:
@@ -80,23 +98,52 @@ class sch(commands.Cog):
     
     
     
-    @commands.command()
+    @commands.command(brief='Check the Formula 1 Schedule',aliases=['races','schedule','time'])
     async def sched(self, ctx, tz: typing.Optional[pytz.timezone]=None):
-    
+        '''
+        params:   self
+                        ctx - discord.py context of command
+                        tz - parsed using a converter, either a pytz time zone if the string is correct or None
+
+        schedule command, displays an embed with the upcoming race, navigate using emojis to see the rest of races
+        timeout on the embed navigation is 60 seconds
+        
+        if a tz parameter isn't none, set the user's last timezone in the db <- Subject to change?
+
+        current_round  - int static indexed at 1 for the JSON file
+        round - int changed throughout the method, round number indexed at 0 for internal use
+        key - str of user's id used as key in time zone db
+        discord_response - catch the return of settz method, not used but required
+        '''
         key = str(ctx.author.id)
         if tz == None:
             tz = await self.convert(key)
+        else:
+            discard_response = await self.settz(key,tz)
         for race in RACES['races']:
-            cr = race['round']
+            current_round = race['round']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
                                                                         '%Y-%m-%dT%H:%M:%SZ')):
                 break
-        r = cr - 1
+        round = current_round - 1
         
 
-        def requester(argus):
-            tem = ''
-            race = RACES['races'][argus[0]]
+        def requester(requested_round,requested_timezone):
+            '''
+            param:
+            requested round - int representing the requested round based on internal numbering (indexed at 0)
+            requested_timezone - datetime.tzinfo object representing the user's timezone
+
+            blocking method, retrives the requested race based on passed parameter
+            get requested round (index checking done before method call)
+
+            race - stored json object at requested index
+            resp - discord.Embed response
+            session - string to parse into a datetime object for given session
+            starttime - datetime converted to requested timezone
+
+            '''
+            race = RACES['races'][requested_round]
             resp = discord.Embed(title='The next race on the calendar is the ' +
                                        race['name'],
                                  description='Round ' + str(race['round']) + ' in ' + race['location'])
@@ -109,36 +156,32 @@ class sch(commands.Cog):
                                value=start_time.strftime('%#I:%M%p %Z on %B %#d'), inline=False)
             resp.set_author(name='F1 Schedule',
                             url='https://i.imgur.com/Ki0HyhF.png')
-            if (tem != ''):
-                resp.set_footer(text='This is the ' + tem + 'Grand Prix')
+            resp.set_footer(text='This is the ' + str(race[round])+'th ' + 'Grand Prix')
             return resp
 
-        with shelve.open("tzinfo", writeback=True) as tzdb:
-            tzdb[key] = tz
-        tzdb.close()
-        resp = requester([r, tz])
+        resp = requester(round, tz)
         msg = await ctx.channel.send(embed=resp)
         await msg.add_reaction("⬅")
         await msg.add_reaction("➡")
-        while True:  # While true, wait for next page or previous apge
+        while True:  # While true, wait for next page or previous page emoji
             try:
                 reaction = await F1SchedBot.wait_for("reaction_add", timeout=45)
                 x = reaction[0]
                 if reaction[1] == ctx.author and x.message.id == msg.id:
                     if str(reaction[0]) == "⬅":
-                        if r == 0:
-                            r += 1
+                        if round == 0:
+                            round += 1
                         resp.clear_fields()
-                        r -= 1
-                        resp = requester([r, tz])
+                        round -= 1
+                        resp = requester(round, tz)
                         await msg.edit(embed=resp)
                         await msg.remove_reaction(reaction[0], reaction[1])
                     elif str(reaction[0]) == "➡":  # Clear and display page 2
-                        if len(RACES['races']) == r:
-                            r -= 1
+                        if len(RACES['races']) == round:
+                            round -= 1
                         resp.clear_fields()
-                        r += 1
-                        resp = requester([r, tz])
+                        round += 1
+                        resp = requester(round, tz)
                         await msg.edit(embed=resp)
                         await msg.remove_reaction(reaction[0], reaction[1])
 
@@ -151,7 +194,7 @@ class sch(commands.Cog):
     @commands.command()
     async def notification(self, ctx, *args):
         for race in RACES['races']:
-            cr = race['round']
+            current_round = race['round']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
                                                                         '%Y-%m-%dT%H:%M:%SZ')):
                 break
@@ -161,10 +204,10 @@ class sch(commands.Cog):
                 tz = tzdb[key]
                 tzdb.close()
             else:
-                tz = pytz.timezone('EST5EDT')
+                tz = pytz.timezone(DEFAULT_TZ)
                 tzdb[key] = tz
                 tzdb.close()
-        race = RACES['races'][cr - 1]
+        race = RACES['races'][current_round - 1]
         menu = discord.Embed(title='Notification Centre for the ' +
                                    race['name'], description='Select the session you would like to be notified for')
         for session in race['sessions']:
@@ -230,7 +273,7 @@ class sch(commands.Cog):
                 await menu_msg.clear_reactions()
                 if (binary_enc != 0):
                     start_time = datetime.datetime.strptime(
-                        RACES['races'][cr - 1]['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
+                        RACES['races'][current_round - 1]['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
                     start_time = start_time.replace(
                         tzinfo=datetime.timezone.utc).astimezone(tz)
                     await asyncio.sleep((start_time - (
@@ -241,12 +284,12 @@ class sch(commands.Cog):
     @commands.command()
     async def race(self, ctx):
         for race in RACES['races']:
-            cr = race['round']
+            current_round = race['round']
             racename = race['name']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
                                                                         '%Y-%m-%dT%H:%M:%SZ')):
                 break
-        race_embed = discord.Embed(title=racename, description=cr)
+        race_embed = discord.Embed(title=racename, description=current_round)
         await ctx.send(embed=race_embed)
 
 
