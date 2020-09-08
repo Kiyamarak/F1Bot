@@ -191,8 +191,17 @@ class sch(commands.Cog):
                 await msg.edit(embed=resp)
                 return
 
-    @commands.command()
-    async def notification(self, ctx, *args):
+    @commands.command(brief='Send a notification for the desired session, optionally with DM and delay in minutes',aliases=['notifyme','notify','ping'])
+    async def notification(self, ctx, dm: typing.Optional[str]='ping',delay: typing.Optional[int]=10):
+        '''
+        Notifies user of start time of given session as selected in a menu. The user is prompted with a list of possible sessions, user reacts with corresponding emoji
+
+        params:   dm - str, default value is ping | if the value is set to dm by the user, notify via DM otherwise mentiont hem at specified time
+                        delay - int, default value is 10 | represents the minutes to lead the notification by, converts to seconds internally
+
+        returns nothing
+        '''
+        delay *= 60
         for race in RACES['races']:
             current_round = race['round']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
@@ -230,10 +239,13 @@ class sch(commands.Cog):
         await menu_msg.add_reaction('5️⃣')
         while True:  # While true, wait for next page or previous apge
             try:
-                reaction = await F1SchedBot.wait_for("reaction_add", timeout=10)
+                reaction = await F1SchedBot.wait_for("reaction_add", timeout=20)
                 x = reaction[0]
 
                 async def chosen():
+                    '''
+                    nested method,  handles closing the menu after the reaction is chosen
+                    '''
                     menu.clear_fields()
                     start_time = datetime.datetime.strptime(
                         race['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
@@ -245,28 +257,24 @@ class sch(commands.Cog):
                     menu.set_author(name='F1 Schedule',
                                     url='https://i.imgur.com/Ki0HyhF.png')
                     await menu_msg.edit(embed=menu)
+                    await menu_msg.clear_reactions()
                     return
 
                 if reaction[1] == ctx.author and x.message.id == menu_msg.id:
                     if str(reaction[0]) == "1️⃣":
                         binary_enc = 'FP1'
-                        await menu_msg.clear_reactions()
                         await chosen()
                     elif str(reaction[0]) == "2️⃣":
                         binary_enc = 'FP2'
-                        await menu_msg.clear_reactions()
                         await chosen()
                     elif str(reaction[0]) == "3️⃣":
                         binary_enc = 'FP3'
-                        await menu_msg.clear_reactions()
                         await chosen()
                     elif str(reaction[0]) == "4️⃣":
                         binary_enc = 'Qualifying'
-                        await menu_msg.clear_reactions()
                         await chosen()
                     elif str(reaction[0]) == "5️⃣":
                         binary_enc = 'Race'
-                        await menu_msg.clear_reactions()
                         await chosen()
 
             except asyncio.TimeoutError:
@@ -276,12 +284,17 @@ class sch(commands.Cog):
                         RACES['races'][current_round - 1]['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
                     start_time = start_time.replace(
                         tzinfo=datetime.timezone.utc).astimezone(tz)
-                    await asyncio.sleep((start_time - (
-                        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz))).seconds)
-                    await ctx.send(ctx.author.mention + " " + binary_enc + " time!")
+                    await asyncio.sleep(((start_time - (
+                        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz))).seconds) - delay)
+                    if dm.upper() == 'DM':
+                        await ctx.author.send(binary_enc+ " beginning now")
+                    else:
+                        await ctx.send(ctx.author.mention + " " + binary_enc + " time!")
                 return
-
-    @commands.command()
+    async def predicate(ctx):
+        return ctx.author.id == 175006927967879169
+    @commands.command(brief='Internal debugging test command')
+    @commands.check(predicate)
     async def race(self, ctx):
         for race in RACES['races']:
             current_round = race['round']
