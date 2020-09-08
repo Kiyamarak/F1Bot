@@ -69,7 +69,7 @@ class sch(commands.Cog):
             resp = discord.Embed(title='Invalid Timezone!',description='Find a list of valid timezones here: \nhttps://pastebin.com/raw/ySiK8ja4')
         resp.set_author(name='F1 Schedule', url="https://i.imgur.com/Ki0HyhF.png")
         return resp
-    @commands.command(brief='Sets your Timezone in the Database',aliases=['tz','timezone','changetz','settimezone','setz'])
+    @commands.command(brief='Sets your Timezone in the Database',aliases=['changetz','settimezone','setz'])
     async def settz(self, ctx, tz: typing.Optional[pytz.timezone]= None):
         ''' 
         key - str of author's id, used as key in time zone database
@@ -81,7 +81,7 @@ class sch(commands.Cog):
         response = await self.set_tz(key,tz)
         await ctx.send(embed=response)
     
-    @commands.command(brief='Check your stored Timezone',asliases=['mytimezone','timezone'])
+    @commands.command(brief='Check your stored Timezone',asliases=['mytimezone','timezone','tz'])
     async def mytz(self,ctx):
         '''
         key - str of author's id, used as key in time zone database
@@ -201,7 +201,13 @@ class sch(commands.Cog):
 
         returns nothing
         '''
+        emoji_dictionary = {'FP1':'1️⃣',
+                                        'FP2':'2️⃣',
+                                        'FP3':'3️⃣',
+                                       'Qualifying': '\U0001F1F6',
+                                       'Race': '\U0001F1F7'}
         delay *= 60
+        listed_sessions = []
         for race in RACES['races']:
             current_round = race['round']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
@@ -229,19 +235,21 @@ class sch(commands.Cog):
             menu.set_author(name='F1 Schedule',
                             url='https://i.imgur.com/Ki0HyhF.png')
             menu.set_footer(
-                text='1️⃣ - FP1, 2️⃣ - FP2, 3️⃣ - FP3, 4️⃣ - Qualifying, 5️⃣ - Race')
+                text='1️⃣ - FP1, 2️⃣ - FP2, 3️⃣ - FP3, 🇶 - Qualifying, 🇷 - Race')
+            listed_sessions.append(session)
         menu_msg = await ctx.send(embed=menu)
         binary_enc = 0
-        await menu_msg.add_reaction('1️⃣')
-        await menu_msg.add_reaction('2️⃣')
-        await menu_msg.add_reaction('3️⃣')
-        await menu_msg.add_reaction('4️⃣')
-        await menu_msg.add_reaction('5️⃣')
+        print(listed_sessions)
+        for sessions in listed_sessions:
+            for session,emoji in emoji_dictionary.items():
+                print(sessions,session)
+                if sessions == session:
+                    await menu_msg.add_reaction(emoji_dictionary[session])
+                    break
         while True:  # While true, wait for next page or previous apge
             try:
                 reaction = await F1SchedBot.wait_for("reaction_add", timeout=20)
-                x = reaction[0]
-
+                target_reaction = reaction[0]
                 async def chosen():
                     '''
                     nested method,  handles closing the menu after the reaction is chosen
@@ -260,22 +268,9 @@ class sch(commands.Cog):
                     await menu_msg.clear_reactions()
                     return
 
-                if reaction[1] == ctx.author and x.message.id == menu_msg.id:
-                    if str(reaction[0]) == "1️⃣":
-                        binary_enc = 'FP1'
-                        await chosen()
-                    elif str(reaction[0]) == "2️⃣":
-                        binary_enc = 'FP2'
-                        await chosen()
-                    elif str(reaction[0]) == "3️⃣":
-                        binary_enc = 'FP3'
-                        await chosen()
-                    elif str(reaction[0]) == "4️⃣":
-                        binary_enc = 'Qualifying'
-                        await chosen()
-                    elif str(reaction[0]) == "5️⃣":
-                        binary_enc = 'Race'
-                        await chosen()
+                if reaction[1] == ctx.author and target_reaction.message.id == menu_msg.id:
+                    binary_enc = emoji_dictionary[str(target_reaction)]
+                    await chosen()
 
             except asyncio.TimeoutError:
                 await menu_msg.clear_reactions()
@@ -310,6 +305,6 @@ class sch(commands.Cog):
         await ctx.send(embed=race_embed)
 
 
-F1SchedBot = F1Bot(command_prefix='!')
+F1SchedBot = F1Bot(command_prefix='?')
 F1SchedBot.add_cog(sch(F1SchedBot))
 F1SchedBot.run(TOKEN)
