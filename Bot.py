@@ -16,8 +16,8 @@ import asyncio
 import typing
 
 TOKEN = open(os.getcwd() + '/token.txt', 'r').read()
-js = open(os.getcwd() + '/2020.json')
-RACES = json.load(js,object_pairs_hook=collections.OrderedDict)
+with open(os.getcwd() + '/2020.json') as js:
+    RACES = json.load(js,object_pairs_hook=collections.OrderedDict)
 DEFAULT_TZ = 'EST5EDT'
 
 class F1Bot(commands.Bot):
