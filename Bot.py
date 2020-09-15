@@ -24,13 +24,15 @@ class F1Bot(commands.Bot):
     async def on_ready(self):
         await self.change_presence(activity=discord.Activity(type=discord.ActivityType.watching,name='Formula 1'))
         print(self.user)
+        self.owner = self.get_user(175006927967879169)
 
     
-class sch(commands.Cog):
+class Schedule_Commands(commands.Cog):
     def __init__(self, bot):
         self.time_now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
         self.url = 'https://i.imgur.com/Ki0HyhF.png'
         self.bot = bot
+        
     
     async def convert(self,key):
         '''
@@ -69,7 +71,8 @@ class sch(commands.Cog):
             resp = discord.Embed(title='Invalid Timezone!',description='Find a list of valid timezones here: \nhttps://pastebin.com/raw/ySiK8ja4')
         resp.set_author(name='F1 Schedule', url="https://i.imgur.com/Ki0HyhF.png")
         return resp
-    @commands.command(brief='Sets your Timezone in the Database',aliases=['changetz','settimezone','setz'])
+    @commands.command(brief='(timezone name)  - Sets your Timezone',aliases=['changetz','settimezone','setz'])
+    @commands.cooldown(2,15,commands.BucketType.user)
     async def settz(self, ctx, tz: typing.Optional[pytz.timezone]= None):
         ''' 
         key - str of author's id, used as key in time zone database
@@ -82,6 +85,7 @@ class sch(commands.Cog):
         await ctx.send(embed=response)
     
     @commands.command(brief='Check your stored Timezone',asliases=['mytimezone','timezone','tz'])
+    @commands.cooldown(2,15,commands.BucketType.user)    
     async def mytz(self,ctx):
         '''
         key - str of author's id, used as key in time zone database
@@ -98,8 +102,9 @@ class sch(commands.Cog):
     
     
     
-    @commands.command(brief='Check the Formula 1 Schedule',aliases=['races','schedule','time'])
-    async def sched(self, ctx, tz: typing.Optional[pytz.timezone]=None):
+    @commands.command(brief='(timezone) Check the Formula 1 Schedule',aliases=['races','sched','time'])
+    @commands.cooldown(2,15,commands.BucketType.user)
+    async def schedule(self, ctx, tz: typing.Optional[pytz.timezone]=None):
         '''
         params:   self
                         ctx - discord.py context of command
@@ -119,7 +124,7 @@ class sch(commands.Cog):
         if tz == None:
             tz = await self.convert(key)
         else:
-            discard_response = await self.settz(key,tz)
+            discard_response = await self.settz(ctx,tz)
         for race in RACES['races']:
             current_round = race['round']
             if (datetime.datetime.utcnow() < datetime.datetime.strptime(race['sessions']['Race'],
@@ -191,7 +196,8 @@ class sch(commands.Cog):
                 await msg.edit(embed=resp)
                 return
 
-    @commands.command(brief='Send a notification for the desired session, optionally with DM and delay in minutes',aliases=['notifyme','notify','ping'])
+    @commands.command(brief='(dm) (prewarning in minutes) Send a notification for the desired session, optionally with DM and delay in minutes',aliases=['notifyme','notif','notify','ping'])
+    @commands.cooldown(2,15,commands.BucketType.user)
     async def notification(self, ctx, dm: typing.Optional[str]='ping',delay: typing.Optional[int]=10):
         '''
         Notifies user of start time of given session as selected in a menu. The user is prompted with a list of possible sessions, user reacts with corresponding emoji
@@ -239,13 +245,8 @@ class sch(commands.Cog):
             listed_sessions.append(session)
         menu_msg = await ctx.send(embed=menu)
         binary_enc = 0
-        print(listed_sessions)
         for sessions in listed_sessions:
-            for session,emoji in emoji_dictionary.items():
-                print(sessions,session)
-                if sessions == session:
-                    await menu_msg.add_reaction(emoji_dictionary[session])
-                    break
+            await menu_msg.add_reaction(emoji_dictionary[sessions])
         while True:  # While true, wait for next page or previous apge
             try:
                 reaction = await F1SchedBot.wait_for("reaction_add", timeout=20)
@@ -255,45 +256,47 @@ class sch(commands.Cog):
                     nested method,  handles closing the menu after the reaction is chosen
                     '''
                     menu.clear_fields()
+                    await menu_msg.clear_reactions()
                     start_time = datetime.datetime.strptime(
                         race['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
                     start_time = start_time.replace(
                         tzinfo=datetime.timezone.utc).astimezone(tz)
-                    menu.add_field(name='Notification set for ', value=binary_enc +
-                                                                       " time at " + start_time.strftime(
-                        '%#I:%M%p %Z on %B %#d'))
-                    menu.set_author(name='F1 Schedule',
-                                    url='https://i.imgur.com/Ki0HyhF.png')
-                    await menu_msg.edit(embed=menu)
-                    await menu_msg.clear_reactions()
-                    return
-
-                if reaction[1] == ctx.author and target_reaction.message.id == menu_msg.id:
-                    binary_enc = emoji_dictionary[str(target_reaction)]
-                    await chosen()
-
-            except asyncio.TimeoutError:
-                await menu_msg.clear_reactions()
-                if (binary_enc != 0):
-                    start_time = datetime.datetime.strptime(
-                        RACES['races'][current_round - 1]['sessions'][binary_enc], '%Y-%m-%dT%H:%M:%SZ')
-                    start_time = start_time.replace(
-                        tzinfo=datetime.timezone.utc).astimezone(tz)
-                    wait_time = ((start_time - (
-                        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz))).seconds) - delay
+                    now_time = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).astimezone(tz)
+                    wait_time = (start_time - now_time).total_seconds() - delay
                     if (wait_time>0):
-                        await asyncio.sleep()
+                        menu.add_field(name='Notification set for ', value=binary_enc +
+                                                                        " time at " + start_time.strftime(
+                            '%#I:%M%p %Z on %B %#d'))
+                        menu.set_author(name='F1 Schedule', url='https://i.imgur.com/Ki0HyhF.png')
+                        await menu_msg.edit(embed=menu)
+                        await asyncio.sleep(wait_time)
                         if dm.upper() == 'DM':
                             await ctx.author.send(binary_enc+ " beginning now")
                         else:
                             await ctx.send(ctx.author.mention + " " + binary_enc + " time!")
                     else:
-                        await ctx.send(embed=discord.Embed(title='Invalid Session',description='The session is too close'))
-                return
-    async def predicate(self,ctx):
+                        menu.title='Invalid Session'
+                        menu.description='The session is too close'
+                        await menu_msg.edit(embed=menu)
+                    
+                       
+                      
+                if reaction[1] == ctx.author and target_reaction.message.id == menu_msg.id:
+                    for key,value in emoji_dictionary.items():
+                        if str(target_reaction) == value:
+                            binary_enc = key
+                            await chosen()
+
+            except asyncio.TimeoutError:
+                await menu_msg.clear_reactions()
+                menu.set_footer(text='This menu is now closed')
+                await menu_msg.edit(embed=menu)
+
+                
+    async def pred(ctx):
         return ctx.author.id == 175006927967879169
     @commands.command(brief='Internal debugging test command')
-    @commands.check(predicate)
+    @commands.check(pred)
     async def race(self, ctx):
         for race in RACES['races']:
             current_round = race['round']
@@ -303,8 +306,14 @@ class sch(commands.Cog):
                 break
         race_embed = discord.Embed(title=racename, description=current_round)
         await ctx.send(embed=race_embed)
+    
+    async def cog_command_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(ctx.author.mention + " "+str(error))
+        else:
+            await self.bot.owner.send(ctx.message.jump_url+" "+str(error))
 
 
-F1SchedBot = F1Bot(command_prefix='?')
-F1SchedBot.add_cog(sch(F1SchedBot))
+F1SchedBot = F1Bot(command_prefix='?f1 ')
+F1SchedBot.add_cog(Schedule_Commands(F1SchedBot))
 F1SchedBot.run(TOKEN)
