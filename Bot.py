@@ -16,7 +16,7 @@ import asyncio
 import typing
 
 TOKEN = open(os.getcwd() + '/token.txt', 'r').read()
-with open(os.getcwd() + '/2020.json') as js:
+with open(os.getcwd() + '/2021.json') as js:
     RACES = json.load(js,object_pairs_hook=collections.OrderedDict)
 DEFAULT_TZ = 'EST5EDT'
 
@@ -69,7 +69,7 @@ class Schedule_Commands(commands.Cog):
                 resp = discord.Embed(title='Timezone Set', description='You have set your timezone to be ' + str(tz))     
         else:
             resp = discord.Embed(title='Invalid Timezone!',description='Find a list of valid timezones here: \nhttps://pastebin.com/raw/ySiK8ja4')
-        resp.set_author(name='F1 Schedule', url="https://i.imgur.com/Ki0HyhF.png")
+        resp.set_author(name='F1 Schedule', icon_url="https://i.imgur.com/Ki0HyhF.png")
         return resp
     @commands.command(brief='(timezone name)  - Sets your Timezone',aliases=['changetz','settimezone','setz'])
     @commands.cooldown(2,15,commands.BucketType.user)
@@ -160,7 +160,8 @@ class Schedule_Commands(commands.Cog):
                 resp.add_field(name=session + ' begins at ',
                                value=start_time.strftime('%#I:%M%p %Z on %B %#d'), inline=False)
             resp.set_author(name='F1 Schedule',
-                            url='https://i.imgur.com/Ki0HyhF.png')
+                            icon_url='https://i.imgur.com/Ki0HyhF.png',
+                            url=race['affiliate'])
             resp.set_footer(text='This is the ' + str(race['round'])+'th ' + 'Grand Prix')
             return resp
 
@@ -196,9 +197,9 @@ class Schedule_Commands(commands.Cog):
                 await msg.edit(embed=resp)
                 return
 
-    @commands.command(brief='(dm) (prewarning in minutes) Send a notification for the desired session, optionally with DM and delay in minutes',aliases=['notifyme','notif','notify','ping'])
+    @commands.command(brief='(prewarning in minutes)(dm) - Send a notification for the desired session, optionally with DM and delay in minutes',aliases=['notifyme','notif','notify','ping'])
     @commands.cooldown(2,15,commands.BucketType.user)
-    async def notification(self, ctx, dm: typing.Optional[str]='ping',delay: typing.Optional[int]=10):
+    async def notification(self, ctx, delay: typing.Optional[int]=10,dm: typing.Optional[str]='ping'):
         '''
         Notifies user of start time of given session as selected in a menu. The user is prompted with a list of possible sessions, user reacts with corresponding emoji
 
@@ -239,7 +240,8 @@ class Schedule_Commands(commands.Cog):
             menu.add_field(name=session + ' begins at ',
                            value=start_time.strftime('%#I:%M%p %Z on %B %#d'), inline=False)
             menu.set_author(name='F1 Schedule',
-                            url='https://i.imgur.com/Ki0HyhF.png')
+                            icon_url='https://i.imgur.com/Ki0HyhF.png',
+                            url=race['affiliate'])
             menu.set_footer(
                 text='1️⃣ - FP1, 2️⃣ - FP2, 3️⃣ - FP3, 🇶 - Qualifying, 🇷 - Race')
             listed_sessions.append(session)
@@ -267,7 +269,7 @@ class Schedule_Commands(commands.Cog):
                         menu.add_field(name='Notification set for ', value=binary_enc +
                                                                         " time at " + start_time.strftime(
                             '%#I:%M%p %Z on %B %#d'))
-                        menu.set_author(name='F1 Schedule', url='https://i.imgur.com/Ki0HyhF.png')
+                        menu.set_author(name='F1 Schedule', icon_url='https://i.imgur.com/Ki0HyhF.png')
                         await menu_msg.edit(embed=menu)
                         await asyncio.sleep(wait_time)
                         if dm.upper() == 'DM':
@@ -314,6 +316,6 @@ class Schedule_Commands(commands.Cog):
             await self.bot.owner.send(ctx.message.jump_url+" "+str(error))
 
 
-F1SchedBot = F1Bot(command_prefix='?f1 ')
+F1SchedBot = F1Bot(command_prefix='?!f1 ')
 F1SchedBot.add_cog(Schedule_Commands(F1SchedBot))
 F1SchedBot.run(TOKEN)
